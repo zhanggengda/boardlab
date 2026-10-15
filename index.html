@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="板演是一间面向创客学习的在线图形化编程与虚拟硬件实验室。" />
+  <title>板演｜虚拟主板实验室</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2320CFAF'/%3E%3Crect x='15' y='10' width='34' height='44' rx='6' fill='white'/%3E%3Crect x='20' y='16' width='24' height='22' rx='2' fill='%234C7EE8'/%3E%3Ccircle cx='23' cy='46' r='3' fill='%23F5B426'/%3E%3Ccircle cx='32' cy='46' r='3' fill='%23E74F83'/%3E%3Ccircle cx='41' cy='46' r='3' fill='%2320CFAF'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="styles.css?v=35.0" />
+  <link rel="stylesheet" href="vision.css?v=35.0" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#" aria-label="板演虚拟主板实验室首页">
+      <span class="brand-mark" aria-hidden="true">▦</span>
+      <span><b>板演</b><small>虚拟主板实验室</small></span>
+    </a>
+
+    <div class="mode-switch" aria-label="运行模式"><button type="button" class="active" data-mode="virtual">虚拟模式</button><button type="button" data-mode="real">真实模式</button></div>
+    <div class="top-actions">
+      <button class="ghost-btn" id="projectMenuBtn" type="button" aria-expanded="false">工程 ▾</button>
+      <button class="ghost-btn" id="resetProgram" type="button">示例 <span>▾</span></button>
+      <button class="stop-btn" id="stopBtn" type="button" disabled><span aria-hidden="true">■</span> 停止</button>
+      <button class="restart-btn" id="restartBtn" type="button" disabled><span aria-hidden="true">↻</span> 重新运行</button>
+      <button class="run-btn" id="runBtn" type="button"><span aria-hidden="true">▶</span> 运行</button>
+    </div>
+    <div id="projectMenu" class="project-file-menu" hidden><label class="project-name-label">工程名称<input id="projectNameInput" maxlength="64" value="我的程序"></label><button id="openProjectBtn" type="button">打开工程… <small>.boardlab / Mind+ .mp</small></button><button id="saveProjectBtn" type="button">保存完整板演工程 <small>K10 / M10 积木、图片、TF 文件与环境设置</small></button><button id="exportMpBtn" type="button">导出 Mind+ .mp <small>1.8.x · K10 上传模式 · 兼容测试版</small></button></div><input id="projectFileInput" type="file" accept=".mp,.boardlab" hidden>
+
+    <div class="examples-popover" id="examplesPopover" hidden>
+      <header><b>K10 示例</b><small>积木示例会替换当前工作区</small></header>
+      <button data-example="hello" type="button"><b>Hello K10</b></button>
+      <button data-example="display" type="button"><b>屏幕显示</b></button>
+      <button data-example="rgb" type="button"><b>RGB 灯光</b></button>
+      <button data-example="button" type="button"><b>按键交互</b></button>
+      <button data-example="night" type="button"><b>智能夜灯</b></button>
+      <button data-example="environment" type="button"><b>环境数据</b></button>
+      <button data-example="face" type="button"><b>人脸识别 · A 学习 / B 遗忘</b></button>
+      <button data-example="image" type="button" hidden><b>本地图片</b></button>
+      <button id="factoryExampleBtn" type="button"><b>K10 出厂演示 · 积木版</b><small>可编辑 · 载入并运行</small></button>
+      <button id="factorySourceBtn" type="button"><b>出厂程序 · 官方源码</b></button>
+    </div>
+  </header>
+
+  <main class="studio">
+    <section class="editor-panel" aria-label="程序编辑器">
+      <div class="editor-tabs" role="tablist">
+        <button class="tab active" data-view="blocks" role="tab" aria-selected="true">积木</button>
+        <button class="tab" data-view="code" role="tab" aria-selected="false">MicroPython</button>
+        <span class="workspace-name">我的程序</span>
+      </div>
+      <div class="editor-body blockly-host" id="blocksView">
+        <nav id="categoryRail" aria-label="积木分类"></nav>
+        <div id="blocklyDiv" aria-label="图形化积木工作区"></div>
+        <button class="bottom-extension-btn" id="addonBtn" type="button"><b>＋</b> 扩展</button>
+        <div class="workspace-actions" aria-label="工作区操作">
+          <button id="undoBtn" type="button" aria-label="撤销" title="撤销"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8H4l4-4M4 8h10a6 6 0 0 1 0 12h-2"/></svg></button>
+          <button id="redoBtn" type="button" aria-label="重做" title="重做"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 8h4l-4-4m4 4H10a6 6 0 0 0 0 12h2"/></svg></button>
+          <button id="captureBtn" type="button" aria-label="截图" title="截图"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v4H3m14-4v4h4M7 21v-4H3m14 4v-4h4M3 12h18M12 3v18"/></svg></button>
+          <button id="zoomInBtn" class="view-btn" type="button" aria-label="放大" title="放大"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21M10.5 7v7m-3.5-3.5h7"/></svg></button>
+          <button id="zoomOutBtn" class="view-btn" type="button" aria-label="缩小" title="缩小"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21M7 10.5h7"/></svg></button>
+          <button id="centerBtn" class="view-btn" type="button" aria-label="居中" title="居中"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/><path d="M12 1v5m0 12v5M1 12h5m12 0h5"/></svg></button>
+        </div>
+        <div class="palette-delete-overlay" aria-hidden="true"><div class="delete-bin"><i></i><b>Ⅱ</b></div></div>
+      </div>
+      <div class="code-view" id="codeView" hidden>
+        <div class="code-toolbar"><span id="codeFileName">main.py</span><div class="code-toolbar-actions"><label for="codeLanguage">语言</label><select id="codeLanguage" aria-label="代码语言"><option value="python">MicroPython（仿真接口）</option><option value="k10-arduino">Arduino C++（预览）</option></select><button id="downloadArduino" type="button" hidden>下载工程</button><button id="copyCode" type="button">复制代码</button></div></div>
+        <div class="code-diagnostics" id="codeDiagnostics" role="status"></div>
+        <pre><code id="pythonCode"></code></pre>
+      </div>
+    </section>
+
+    <section class="sim-panel" aria-label="K10 虚拟仿真器">
+      <div class="sim-head">
+        <div><strong id="simBoardName">行空板 K10 仿真器</strong><span id="simStatus"><i></i>待运行</span></div>
+        <button id="virtualIOBtn" class="virtual-io-btn" type="button">虚拟输入</button><div class="speed-control"><label for="speed">速度</label><select id="speed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></div>
+      </div>
+      <div class="sim-stage" id="simStage">
+        <div class="board-frame"><div class="k10-board" aria-label="行空板 K10 正面仿真"><div class="lcd" id="lcd"><div class="lcd-grid"></div><div class="lcd-content" id="lcdContent"><span class="lcd-kicker">K10 READY</span><strong>你好，创客！</strong><p>点击“运行”开始仿真</p></div></div></div><div class="rgb-row" aria-label="三颗 RGB 灯"><span id="led0"></span><span id="led1"></span><span id="led2"></span></div></div>
+        <div class="board-controls"><div class="hardware-control"><button class="hardware-btn" id="buttonA" type="button"><b>A</b><span>按键</span></button><button class="key-map" data-button="A" type="button">键盘 <kbd id="keyA">A</kbd></button></div><div class="hardware-control"><button class="hardware-btn" id="buttonB" type="button"><b>B</b><span>按键</span></button><button class="key-map" data-button="B" type="button">键盘 <kbd id="keyB">B</kbd></button></div><button class="hardware-btn reset" id="boardReset" type="button"><b>↻</b><span>复位</span></button></div>
+      </div>
+      <div class="runtime-controls" aria-label="运行控制"><button id="pauseBtn" type="button" disabled aria-pressed="false">暂停</button><button id="stepBtn" type="button">单步</button></div>
+      <div class="sensor-panel">
+        <details class="factory-demo-help" id="factoryDemoHelp" open hidden><summary>出厂演示 · 互动指南</summary><p>A 上一页 / B 下一页。展开左侧函数可修改程序；植物页拖动下方环境滑块，平衡球用“姿态”面板。</p><div class="factory-demo-controls"><button id="factoryFaceToggle" type="button" aria-pressed="false">模拟人脸：无</button><label>模拟语音<select id="factoryVoiceCommand"><option value="1">1 · 开灯</option><option value="2">2 · 关灯</option><option value="3">3 · 动画</option><option value="4">4 · 古诗</option><option value="5">5 · 播放音乐</option><option value="6">6 · 平衡</option></select></label><button id="factoryVoiceSend" type="button">发送</button></div><div class="factory-demo-controls factory-inspect"><label>查看页面积木<select id="factoryProcedure"><option>刷新当前页面</option><option>初始化出厂演示</option><option>开机首页</option><option>人脸检测页面</option><option>处理语音命令</option><option>语音显示页面</option><option>植物互动页面</option><option>教程二维码页面</option><option>绘制旋转立方体</option><option>绘制平衡球</option></select></label><button id="factoryInspect" type="button">展开</button></div><small>经典出厂程序的图形化教学移植，并非自动反编译。默认人脸/语音为模拟输入；音乐请在“虚拟输入”载入 music.wav。</small><div class="factory-demo-links"><button id="factoryHelpSource" type="button">官方源码</button><a href="https://www.unihiker.com.cn/wiki/k10" target="_blank" rel="noopener">官方教程 ↗</a></div></details>
+        <div class="sensor-tabs"><button class="active" data-sensor-tab="environment" type="button">环境传感器</button><button data-sensor-tab="motion" type="button">姿态</button></div>
+        <div class="sensor-page active" id="environmentSensors"><label><span>温度 <output id="tempOut">24°C</output></span><input id="tempInput" type="range" min="-10" max="50" value="24" /></label><label><span>湿度 <output id="humidityOut">56%</output></span><input id="humidityInput" type="range" min="0" max="100" value="56" /></label><label><span>环境光 <output id="lightOut">320 lx</output></span><input id="lightInput" type="range" min="0" max="2000" value="320" /></label></div>
+        <div class="sensor-page" id="motionSensors"><div class="tilt-pad"><button data-tilt="forward" type="button">↑<small>前倾</small></button><button data-tilt="left" type="button">←<small>左倾</small></button><button data-tilt="flat" class="flat active" type="button">●<small>平放</small></button><button data-tilt="right" type="button">→<small>右倾</small></button><button data-tilt="back" type="button">↓<small>后倾</small></button></div><div class="axis-values"><span>X <b id="axisX">0</b></span><span>Y <b id="axisY">0</b></span><span>Z <b id="axisZ">1000</b></span></div></div>
+      </div>
+      <section class="console" aria-label="程序输出"><div class="console-head"><strong>输出</strong><button id="clearConsole" type="button">清空</button></div><div class="console-output" id="consoleOutput"><p><time>00:00:00</time><span>系统</span>K10 仿真器已就绪</p></div></section>
+    </section>
+  </main>
+
+  <div class="extensions-screen" id="extensionsModal" hidden>
+    <section class="extensions-library" role="dialog" aria-modal="true" aria-labelledby="extensionsTitle">
+      <header class="extension-topbar"><button class="extension-back" id="closeExtensions" type="button" aria-label="返回编辑器"><span>←</span> 返回</button><h2 id="extensionsTitle">扩展</h2><label class="extension-search"><span aria-hidden="true">⌕</span><input id="boardSearch" type="search" placeholder="搜索主板或模块" aria-label="搜索主板或模块" /></label></header>
+      <nav class="extension-tabs" id="extensionTabs" aria-label="扩展分类"><button class="active" data-extension-tab="board" type="button">主控板</button><button data-extension-tab="kit" type="button">套件</button><button data-extension-tab="shield" type="button">扩展板</button><button data-extension-tab="sensor" type="button">传感器</button><button data-extension-tab="actuator" type="button">执行器</button><button data-extension-tab="communication" type="button">通信模块</button><button data-extension-tab="display" type="button">显示器</button><button data-extension-tab="user" type="button">用户库</button></nav>
+      <div class="extension-help">K10 与 M10 使用不同的硬件和编程接口。切换主板会保留各自工作区；M10 已开放基础仿真与 Python 3 工程。</div>
+      <div class="extension-content"><div class="board-grid" id="boardGrid" aria-live="polite"></div><div class="extension-empty" id="extensionEmpty" hidden><strong>这个分类正在准备中</strong><span>当前可以继续使用 K10 内置模块。</span></div></div>
+      <footer class="extension-footer"><span id="extensionSummary">K10 基础积木与虚拟仿真已可用</span><button id="finishExtensions" type="button">完成</button></footer>
+    </section>
+  </div>
+
+  <dialog class="factory-example-dialog" id="factoryExampleDialog" aria-labelledby="factoryExampleTitle">
+    <header><div><h2 id="factoryExampleTitle">K10 出厂演示</h2><p>第一次连接 K10 时运行的多功能演示程序</p></div><button id="closeFactoryExample" type="button" aria-label="关闭出厂示例">×</button></header>
+    <div class="factory-example-body">
+      <p class="factory-intro">按 B 键切换人脸检测、语音识别、植物传感器互动和教程二维码。可以载入经典出厂程序的可编辑积木移植版，在板演中运行；下方仍保留两个版本的官方完整源码和图片资源。</p>
+      <button class="factory-load-blocks" id="factoryLoadBlocks" type="button">载入积木版并运行（替换当前工作区）</button>
+      <div class="factory-code-controls"><label>版本 <select id="factoryVersion"><option value="241202">2024-12-02 · 经典出厂版</option><option value="260810">2026-08-10 · 显示修复版</option></select></label><label>阅读 <select id="factoryCodeView"><option value="logic">主程序逻辑（折叠图片数据）</option><option value="full">完整源码（含图片数据）</option></select></label></div>
+      <div class="factory-source-header"><b id="factoryFilename"></b><span>DFRobot 官方</span></div>
+      <pre class="factory-source-code" tabindex="0" aria-label="K10 官方出厂源码"><code id="factoryCode"></code></pre>
+      <p id="factoryStatus" class="factory-status" role="status"></p>
+      <p class="factory-upload-note">积木版用于板演仿真，可修改并保存为完整 .boardlab 工程；尚未验证完整程序的 Mind+ 积木导出或实板烧录。若要原样恢复实板出厂固件，可复制下方完整源码到 Mind+ 手动编程区，再选择 K10 编译、上传；这会替换板上程序。</p>
+    </div>
+    <footer><a href="https://www.unihiker.com.cn/wiki/k10/default-program" target="_blank" rel="noopener">官方说明</a><div><a id="downloadFactorySource" class="factory-download" download>下载官方源码 ZIP</a><button id="copyFactorySource" type="button" disabled>复制完整源码</button></div></footer>
+  </dialog>
+  <div class="toast" id="toast" role="status"></div>
+  <dialog id="projectDialog" class="project-dialog"><header><strong id="projectDialogTitle">工程检查</strong><button id="closeProjectDialog" type="button" aria-label="关闭工程检查">×</button></header><p id="projectSummary"></p><p id="projectReplaceNote" hidden>打开后替换当前编辑区；当前程序会先保存一份恢复副本。</p><ul id="projectIssues"></ul><footer><button id="recoverProjectBtn" type="button" hidden>恢复打开前的程序</button><button id="applyProjectBtn" type="button" hidden>打开工程</button></footer></dialog>
+  <script src="vendor/blockly_compressed.js"></script><script src="vendor/field-colour.js"></script><script src="vendor/blocks_compressed.js"></script><script src="vendor/python_compressed.js"></script><script src="vendor/zh-hans.js"></script><script src="vendor/qrcode.min.js"></script><script src="mind-blocks.js?v=27.0"></script><script src="reference-blocks.js?v=35.0"></script><script src="k10-native.js?v=35.0"></script><script src="continuous-toolbox.js?v=27.0"></script><script src="k10-arduino.js?v=35.0"></script><script src="m10-native.js?v=31.1"></script><script src="m10-python.js?v=31.1"></script><script src="vendor/fflate.js"></script><script src="mindplus-project.js?v=33.1"></script><script src="project-bundle.js?v=33.1"></script><script src="project-files.js?v=33.1"></script><script src="runtime-debug.js?v=33.1"></script><script src="k10-factory-example.js?v=35.0"></script><script src="k10-factory-blocks.js?v=35.0"></script><script src="app.js?v=35.0"></script>
+<script src="vision-core.js?v=35.0"></script><script src="camera-link.js?v=35.0"></script><script src="vision.js?v=35.0"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+

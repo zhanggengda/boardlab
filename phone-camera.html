@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="referrer" content="no-referrer"><title>板演 · 手机摄像头</title><link rel="stylesheet" href="vision.css?v=35.0"></head>
+<body class="phone-camera"><main><header><b>板演</b><h1>手机摄像头</h1><p>画面传到配对电脑，A/B 操作电脑上的积木程序。</p></header>
+<div class="phone-preview"><video id="phoneVideo" autoplay muted playsinline></video><div class="vision-keys"><button type="button" data-phone-key="A"><b>A</b><span>虚拟按键</span></button><button type="button" data-phone-key="B"><b>B</b><span>虚拟按键</span></button></div></div>
+<p id="phoneStatus" role="status" aria-live="polite">点击开启摄像头，然后将返回码发给电脑。</p>
+<p id="phonePairingTime" class="pairing-time"></p>
+<details id="phonePairing"><summary>重新配对 / 粘贴手机链接</summary><p>在电脑选择“手机摄像头 → 电脑”，生成新二维码。请扫描完整二维码，或把电脑显示的“手机链接”粘贴到这里。直接打开本页地址不包含配对码。</p><label>电脑生成的完整手机链接<textarea id="phonePairLink" placeholder="https://…/phone-camera.html#offer=…&amp;expires=…" autocomplete="off" spellcheck="false"></textarea></label><button id="phoneApplyPairing" type="button">使用此链接配对</button></details>
+<div class="vision-actions"><button id="phoneStart" type="button">开启 / 恢复摄像头</button><button id="phoneSwitch" type="button">切换前后摄像头</button></div>
+<div class="vision-actions"><button id="phonePause" type="button">暂停拍摄</button><button id="phoneEnd" type="button">结束连接</button></div>
+<section id="phoneReturn" hidden><label>手机返回码（粘贴到电脑）<textarea id="phoneAnswer" readonly></textarea></label><button id="phoneCopy" type="button">复制返回码</button><p>电脑点击“确认连接这台手机”后即可传送画面。配对码只用于本次连接。</p></section>
+<label class="vision-consent"><input type="checkbox" id="phoneVolume">尝试音量键：加 → A，减 → B</label><p id="phoneVolumeStatus">手机浏览器通常不向网页提供音量键事件；请优先使用画面旁的 A/B 按钮。</p>
+<footer>不采集声音。请保持页面前台和手机亮屏。首版适合同一 Wi-Fi，未配置跨网络中继。当前网站的原有访问权限仍然适用。</footer>
+</main><script src="vision-core.js?v=35.0"></script><script src="camera-link.js?v=35.0"></script><script src="phone-camera.js?v=35.0"></script></body></html>
