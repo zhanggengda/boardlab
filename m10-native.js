@@ -207,7 +207,7 @@ function openM10ImageEditor(block){
   m10ImageEditor?.remove();
   const panel=document.createElement('section');panel.className='m10-image-editor';panel.setAttribute('role','dialog');panel.setAttribute('aria-label','M10 本地图片');
   const settings=block.m10Image;
-  panel.innerHTML=`<header><b>M10 本地图片</b><button type="button" aria-label="关闭">×</button></header><div class="m10-image-layout"><div><label>图片文件 <input class="m10-file-name" readonly><button class="m10-open" type="button">打开…</button></label><input class="m10-file" type="file" accept="image/png,image/jpeg,image/webp,image/bmp" hidden><div class="m10-dimensions"><label>宽 <input data-dim="width" type="number" min="1" max="4096"></label><label>高 <input data-dim="height" type="number" min="1" max="4096"></label></div><p>按比例缩放到宽高范围内。修改后需重新运行，才会影响仿真。</p></div><div><b>屏幕预览 <small>240 × 320</small></b><svg viewBox="0 0 240 320"></svg></div></div>`;
+  panel.innerHTML=`<header><b>M10 本地图片</b><button type="button" aria-label="关闭">×</button></header><div class="m10-image-layout"><div><label>图片文件 <input class="m10-file-name" readonly><button class="m10-open" type="button">打开…</button></label><input class="m10-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp,image/x-ms-bmp" hidden><button class="image-input-dropzone m10-image-dropzone" type="button">拖动图片到这里<small>或复制图片后按 Ctrl+V 粘贴</small></button><p class="m10-image-error" role="alert"></p><div class="m10-dimensions"><label>宽 <input data-dim="width" type="number" min="1" max="4096"></label><label>高 <input data-dim="height" type="number" min="1" max="4096"></label></div><p>按比例缩放到宽高范围内。修改后需重新运行，才会影响仿真。</p></div><div><b>屏幕预览 <small>240 × 320</small></b><svg viewBox="0 0 240 320"></svg></div></div>`;
   document.body.append(panel);m10ImageEditor=panel;
   const anchor=block.getSvgRoot().getBoundingClientRect(),width=Math.min(640,window.innerWidth-24);
   panel.style.width=width+'px';panel.style.left=Math.max(12,Math.min(anchor.left,window.innerWidth-width-12))+'px';panel.style.top=Math.max(12,Math.min(anchor.bottom+12,window.innerHeight-panel.offsetHeight-12))+'px';
@@ -218,7 +218,8 @@ function openM10ImageEditor(block){
     if(settings.src){const image=document.createElementNS('http://www.w3.org/2000/svg','image');const size=m10Contain(settings.naturalW,settings.naturalH,settings.width,settings.height);image.setAttribute('x',block.getFieldValue('X')||0);image.setAttribute('y',block.getFieldValue('Y')||0);image.setAttribute('width',size.w);image.setAttribute('height',size.h);image.setAttribute('href',settings.src);svg.append(image);}
   };
   const changed=old=>{Blockly.Events.fire(new Blockly.Events.BlockChange(block,'mutation',null,JSON.stringify(old),JSON.stringify(settings)));markProgramModified();saveWorkspace();updateCode();render();};
-  panel.querySelector('header button').onclick=()=>{panel.remove();m10ImageEditor=null;};
+  let imageInput;
+  panel.querySelector('header button').onclick=()=>{imageInput?.dispose();panel.remove();m10ImageEditor=null;};
   panel.querySelector('.m10-open').onclick=()=>panel.querySelector('.m10-file').click();
   panel.querySelectorAll('[data-dim]').forEach(input=>{
     const apply=()=>{const value=Number(input.value);if(input.value===''||!Number.isFinite(value)||value<1||value>4096)return;
@@ -228,14 +229,17 @@ function openM10ImageEditor(block){
     input.addEventListener('input',apply);
     input.addEventListener('change',()=>{apply();render();});
   });
-  panel.querySelector('.m10-file').addEventListener('change',async event=>{
-    const file=event.target.files[0];if(!file)return;
-    if(file.size>8*1024*1024){toast('请选择小于 8 MB 的图片');return;}
-    try{
-      const src=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(file);});
-      const img=new Image();img.src=src;await img.decode();
-      if(block.isDisposed())return;
-      const old={...settings};Object.assign(settings,{src,filename:file.name,naturalW:img.naturalWidth,naturalH:img.naturalHeight});changed(old);
-    }catch{toast('图片无法解码，请使用 PNG、JPEG、WebP 或 BMP');}
+  panel.querySelector('.m10-image-dropzone').onclick=()=>panel.querySelector('.m10-file').click();
+  const error=panel.querySelector('.m10-image-error');
+  imageInput=window.BoardlabImageInput.bind({
+    target:panel,input:panel.querySelector('.m10-file'),maxBytes:8*1024*1024,isActive:()=>!block.isDisposed(),
+    load:async file=>{
+      const src=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(file)});
+      const image=new Image();image.src=src;await image.decode();
+      return {src,naturalW:image.naturalWidth,naturalH:image.naturalHeight};
+    },
+    apply:(selected,file)=>{const old={...settings};Object.assign(settings,{...selected,filename:file.name});changed(old)},
+    onError:message=>{error.textContent=message},
+    onBusy:value=>{error.classList.toggle('image-input-loading',value);if(value)error.textContent='正在导入图片…';else if(error.textContent==='正在导入图片…')error.textContent=''}
   });render();
 }

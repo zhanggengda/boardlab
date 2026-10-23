@@ -60,7 +60,7 @@ function defineK10NativeBlocks(){
       .appendField('Y')
       .appendField(new Blockly.FieldNumber(0,0,320),'Y');
     this.setPreviousStatement(true);this.setNextStatement(true);this.setStyle('board_blocks');this.setInputsInline(true);
-    this.setTooltip('点击齿轮，从电脑选择要显示的图片。');
+    this.setTooltip('点击齿轮选择图片，也可拖入图片或按 Ctrl+V 粘贴。');
   }};
   // Complete the string/number conversions present in the Mind+ operators.
   for(const [type,message,args,output] of [
@@ -131,22 +131,29 @@ function openK10ImagePicker(block){
   closeK10ImagePicker?.();
   if(block.isInFlyout){toast('先将积木拖到工作区，再选择图片');return}
   const settings=k10ImageSettings(block),popover=document.createElement('div');popover.className='k10-image-popover';popover.setAttribute('role','dialog');popover.setAttribute('aria-label','选择本地图片');
-  popover.innerHTML='<div class="k10-image-head"><strong>本地图片</strong><button type="button" class="k10-image-close" aria-label="关闭图片设置">×</button></div><div class="k10-image-content"><div class="k10-image-fields"><div class="k10-image-file-row"><span>图片文件</span><input class="k10-image-name" aria-label="已选图片" readonly placeholder="尚未选择图片"><button type="button" class="k10-image-open">打开…</button></div><div class="k10-image-size"><label>宽<input type="number" class="k10-image-width" min="1" max="240"></label><label>高<input type="number" class="k10-image-height" min="1" max="320"></label></div><small>本地图片最大 240 × 320，不保留透明背景。</small><p class="k10-image-error" role="alert"></p><input class="k10-image-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp,image/x-ms-bmp" hidden></div><div class="k10-image-preview-column"><div class="k10-image-preview-title">屏幕预览 <span>240 × 320</span></div><div class="k10-image-preview"><canvas width="240" height="320"></canvas><span class="k10-image-empty">点击“打开”选择图片</span></div></div></div>';
+  popover.innerHTML='<div class="k10-image-head"><strong>本地图片</strong><button type="button" class="k10-image-close" aria-label="关闭图片设置">×</button></div><div class="k10-image-content"><div class="k10-image-fields"><div class="k10-image-file-row"><span>图片文件</span><input class="k10-image-name" aria-label="已选图片" readonly placeholder="尚未选择图片"><button type="button" class="k10-image-open">打开…</button></div><button type="button" class="image-input-dropzone k10-image-dropzone">拖动图片到这里<small>或复制图片后按 Ctrl+V 粘贴</small></button><div class="k10-image-size"><label>宽<input type="number" class="k10-image-width" min="1" max="240"></label><label>高<input type="number" class="k10-image-height" min="1" max="320"></label></div><small>本地图片最大 240 × 320，不保留透明背景。</small><p class="k10-image-error" role="alert"></p><input class="k10-image-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp,image/x-ms-bmp" hidden></div><div class="k10-image-preview-column"><div class="k10-image-preview-title">屏幕预览 <span>240 × 320</span></div><div class="k10-image-preview"><canvas width="240" height="320"></canvas><span class="k10-image-empty">拖入图片、Ctrl+V 粘贴，或点击“打开”</span></div></div></div>';
   document.body.append(popover);
   const rect=block.getSvgRoot().getBoundingClientRect(),popupRect=popover.getBoundingClientRect(),popoverWidth=popupRect.width;
-  const editorRight=document.getElementById('blocksView')?.getBoundingClientRect().right||innerWidth;
+  const editorRight=Math.min(innerWidth,document.getElementById('blocksView')?.getBoundingClientRect().right||innerWidth);
   const top=Math.max(8,Math.min(rect.bottom+8,innerHeight-popupRect.height-8));
   popover.style.left=`${Math.max(8,Math.min(rect.left,editorRight-popoverWidth-8))}px`;
   popover.style.top=`${top}px`;
   const name=popover.querySelector('.k10-image-name'),width=popover.querySelector('.k10-image-width'),height=popover.querySelector('.k10-image-height'),canvas=popover.querySelector('canvas'),empty=popover.querySelector('.k10-image-empty'),error=popover.querySelector('.k10-image-error'),fileInput=popover.querySelector('.k10-image-input');
   const draw=()=>{name.value=settings.name;width.value=settings.width;height.value=settings.height;const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,240,320);empty.hidden=!!settings.src;if(settings.src){const image=k10ImageFromSource(settings.src);if(image.complete&&image.naturalWidth)ctx.drawImage(k10LocalBitmap(image,settings.width,settings.height),Number(block.getFieldValue('X'))||0,Number(block.getFieldValue('Y'))||0);else image.addEventListener('load',draw,{once:true})}};
   const persist=()=>{const nextData=JSON.stringify({localImage:settings});if(block.data!==nextData)markProgramModified();block.data=nextData;error.textContent=saveWorkspace()?'':'图片已加载，但浏览器存储空间不足，刷新后可能丢失';updateCode()};
-  const close=()=>{document.removeEventListener('pointerdown',outside,true);popover.remove();if(closeK10ImagePicker===close)closeK10ImagePicker=null};
+  let imageInput;
+  const close=()=>{imageInput?.dispose();document.removeEventListener('pointerdown',outside,true);popover.remove();if(closeK10ImagePicker===close)closeK10ImagePicker=null};
   const outside=event=>{if(!popover.contains(event.target)&&!block.getSvgRoot()?.contains(event.target))close()};
   closeK10ImagePicker=close;
   popover.querySelector('.k10-image-close').onclick=close;
   popover.querySelector('.k10-image-open').onclick=()=>fileInput.click();
-  fileInput.onchange=async()=>{const file=fileInput.files?.[0];if(!file)return;error.textContent='';if(!/^image\/(png|jpeg|webp|gif|bmp|x-ms-bmp)$/.test(file.type)||file.size>20*1024*1024){error.textContent='请选择 20 MB 以内的 PNG、JPG、WebP、GIF 或 BMP 图片';return}try{const selected=await k10ImageData(file);Object.assign(settings,{name:file.name,...selected});persist();draw()}catch{error.textContent='图片无法打开，请更换文件'}fileInput.value=''};
+  popover.querySelector('.k10-image-dropzone').onclick=()=>fileInput.click();
+  imageInput=window.BoardlabImageInput.bind({
+    target:popover,input:fileInput,maxBytes:20*1024*1024,load:k10ImageData,isActive:()=>!block.isDisposed?.(),
+    apply:(selected,file)=>{Object.assign(settings,{name:file.name,...selected});persist();draw()},
+    onError:message=>{error.textContent=message},
+    onBusy:value=>{error.classList.toggle('image-input-loading',value);if(value)error.textContent='正在导入图片…';else if(error.textContent==='正在导入图片…')error.textContent=''}
+  });
   for(const [input,key] of [[width,'width'],[height,'height']])input.onchange=()=>{settings[key]=Math.max(1,Math.min(key==='width'?240:320,Math.round(Number(input.value))||1));persist();draw()};
   popover.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();close()}});
   document.addEventListener('pointerdown',outside,true);draw();popover.querySelector('.k10-image-open').focus();

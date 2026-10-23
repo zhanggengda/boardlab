@@ -252,6 +252,13 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .k10-image-empty {position:absolute;max-width:150px;color:#8c99ad;font-size:12px;text-align:center;pointer-events:none;}
 .k10-image-empty[hidden] {display:none;}
 .k10-image-error {min-height:16px;margin:8px 0 0;color:#c73758;font-size:12px;}
+.image-input-dropzone {display:block;box-sizing:border-box;width:100%;margin:12px 0;padding:14px 8px;border:1px dashed #b9aded;border-radius:9px;background:#f7f5ff;color:#5942c7;text-align:center;font:600 13px/1.6 "Microsoft YaHei",sans-serif;cursor:pointer;}
+.image-input-dropzone small {display:block;color:#8c81ad;font-size:11px;font-weight:400;}
+.image-input-dropzone:hover,.image-input-dropzone:focus-visible {background:#efebff;border-color:#5942e7;outline:2px solid #c7bcff;outline-offset:2px;}
+.image-input-dragging {outline:3px solid #9a87ff;outline-offset:-3px;}
+.image-input-dragging .image-input-dropzone {background:#e9e1ff;border-style:solid;border-color:#5942e7;}
+.m10-image-layout .m10-image-error {min-height:16px;margin:4px 0;color:#c73758;font-size:12px;}
+.k10-image-error.image-input-loading,.m10-image-layout .m10-image-error.image-input-loading {color:#778aa3;}
 .k10-image-popover button:focus-visible,.k10-image-popover input:focus-visible {outline:2px solid #aa9cfc;outline-offset:2px;}
 @media (max-width:600px) {.k10-image-content {grid-template-columns:minmax(0,1fr) 150px;gap:10px;padding:10px;}.k10-image-file-row {flex-wrap:wrap;}.k10-image-file-row>span {width:100%;}.k10-image-preview canvas {width:128px;height:171px;}.k10-image-empty {max-width:115px;}}
 .workspace-actions {top:auto;bottom:17px;right:17px;flex-direction:column;align-items:center;gap:8px;}
