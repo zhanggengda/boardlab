@@ -34,7 +34,7 @@ function defineReferenceBlocks() {
   for(const block of blocks) {
     let args=block.args0||[];
     for(let i=1;block['message'+i]!==undefined;i++){const offset=args.length;block.message0+=' '+block['message'+i].replace(/%(\d+)/g,(_,n)=>'%'+(Number(n)+offset));args=args.concat(block['args'+i]||[]);delete block['message'+i];delete block['args'+i];}block.args0=args;
-    if(block.type.startsWith('screen_'))block.tooltip='K10 屏幕按 240×320 像素绘制；缓存文字与图形后使用“显示更新”。';
+    if(block.type.startsWith('screen_'))block.tooltip='K10 竖屏为 240×320、横屏为 320×240 像素；缓存文字与图形后使用“显示更新”。';
   }
   Blockly.defineBlocksWithJsonArray(blocks);
   for(const type of ['screen_text_line','screen_text_xy']) {
@@ -286,14 +286,35 @@ function referenceValue(block) {
 }
 
 let screenBuffer=null,screenLineWidth=1,screenFrameDeferred=false,pendingScreenFrame=null;
+function getK10ScreenSize(direction=typeof nativeRuntime==='undefined'?0:nativeRuntime.direction){
+  const angle=[0,90,180,270].includes(Number(direction))?Number(direction):0;
+  return {width:angle%180?320:240,height:angle%180?240:320,angle};
+}
+// Mind+ emits screen_dir once in setup, including a direction block nested in
+// a loop. Visit compilable stacks in source order; a later setting replaces it.
+function getK10ProgramDirection(workspace){
+  let direction=0;const seen=new Set();
+  const visit=block=>{
+    if(!block||seen.has(block))return;seen.add(block);
+    if(block.type==='screen_orientation')direction=getK10ScreenSize(block.getFieldValue('DIRECTION')).angle;
+    for(const input of block.inputList||Object.keys(block.inputs||{}).map(name=>({name})))visit(block.getInputTargetBlock(input.name));
+    visit(block.getNextBlock());
+  };
+  workspace?.getTopBlocks(true).filter(block=>['board_start','button_event','tilt_event','procedures_defnoreturn','procedures_defreturn'].includes(block.type)).forEach(visit);
+  return direction;
+}
+function initializeK10Screen(workspace){
+  nativeRuntime.direction=getK10ProgramDirection(workspace);screenBuffer=null;pendingScreenFrame=null;applyScreenDirection();
+}
 function getScreenBuffer() {
-  if(!screenBuffer){screenBuffer=document.createElement('canvas');screenBuffer.width=240;screenBuffer.height=320;screenBuffer.getContext('2d').fillStyle='#ffffff';screenBuffer.getContext('2d').fillRect(0,0,240,320)}
+  const {width,height}=getK10ScreenSize();
+  if(!screenBuffer||screenBuffer.width!==width||screenBuffer.height!==height){const background=screenBuffer?.background||'#ffffff';screenBuffer=document.createElement('canvas');screenBuffer.width=width;screenBuffer.height=height;screenBuffer.background=background;screenBuffer.getContext('2d').fillStyle=background;screenBuffer.getContext('2d').fillRect(0,0,width,height)}
   return screenBuffer;
 }
 function presentScreenBuffer() {
   if(screenFrameDeferred){
-    pendingScreenFrame||=document.createElement('canvas');pendingScreenFrame.width=240;pendingScreenFrame.height=320;
-    pendingScreenFrame.getContext('2d').drawImage(getScreenBuffer(),0,0);return;
+    const buffer=getScreenBuffer();pendingScreenFrame||=document.createElement('canvas');pendingScreenFrame.width=buffer.width;pendingScreenFrame.height=buffer.height;
+    pendingScreenFrame.getContext('2d').drawImage(buffer,0,0);return;
   }
   pendingScreenFrame=null;publishScreenFrame(getScreenBuffer());
 }
@@ -307,10 +328,12 @@ function publishScreenFrame(frame){
   displayMode='canvas';
   let canvas=lcd.querySelector(':scope > .k10-canvas');
   if(!canvas){
-    canvas=document.createElement('canvas');canvas.width=240;canvas.height=320;canvas.className='k10-canvas';
+    canvas=document.createElement('canvas');canvas.className='k10-canvas';
     lcd.replaceChildren(canvas);
   }
-  canvas.getContext('2d').drawImage(frame,0,0);
+  if(canvas.width!==frame.width)canvas.width=frame.width;
+  if(canvas.height!==frame.height)canvas.height=frame.height;
+  const ctx=canvas.getContext('2d');ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(frame,0,0);
 }
 function referenceExecute(block) {
   const f=name=>block.getFieldValue(name),v=name=>blockValue(block.getInputTargetBlock(name));
@@ -332,15 +355,16 @@ function referenceExecute(block) {
   const num=name=>Number(block.type.endsWith('_value')?v(name):f(name))||0;
   ctx.strokeStyle=f('COLOR')||'#000';ctx.fillStyle=f('COLOR')||'#000';ctx.lineWidth=screenLineWidth;
   if(block.type==='screen_update')presentScreenBuffer();
-  if(block.type==='screen_clear_all'){ctx.clearRect(0,0,240,320);if(!window.K10Vision?.displaying()){ctx.fillStyle=c.background||'#fff';ctx.fillRect(0,0,240,320);}presentScreenBuffer()}
-  if(block.type==='screen_clear_line'){if(window.K10Vision?.displaying())ctx.clearRect(0,(num('ROW')-1)*24,240,24);else{ctx.fillStyle=c.background||'#fff';ctx.fillRect(0,(num('ROW')-1)*24,240,24);}presentScreenBuffer()}
+  if(block.type==='screen_clear_all'){ctx.clearRect(0,0,c.width,c.height);if(!window.K10Vision?.displaying()){ctx.fillStyle=c.background||'#fff';ctx.fillRect(0,0,c.width,c.height);}presentScreenBuffer()}
+  if(block.type==='screen_clear_line'){const y=(num('ROW')-1)*24+5;if(window.K10Vision?.displaying())ctx.clearRect(0,y,c.width,24);else{ctx.fillStyle=c.background||'#fff';ctx.fillRect(0,y,c.width,24);}presentScreenBuffer()}
   if(block.type==='screen_width')screenLineWidth=num('WIDTH');
   if(block.type==='screen_point')ctx.fillRect(num('X'),num('Y'),1,1);
   if(['screen_line','screen_line_value'].includes(block.type)){ctx.beginPath();ctx.moveTo(num('X1'),num('Y1'));ctx.lineTo(num('X2'),num('Y2'));ctx.stroke()}
   if(['screen_rect','screen_circle','screen_rect_value','screen_circle_value'].includes(block.type)){ctx.beginPath();if(block.type.startsWith('screen_rect'))ctx.rect(num('X'),num('Y'),num('W'),num('H'));else ctx.arc(num('X'),num('Y'),Math.max(0,num('R')),0,Math.PI*2);if(f('FILL')==='YES'){ctx.fillStyle=f('FCOLOR');ctx.fill()}ctx.stroke()}
   if(['screen_text_line','screen_text_xy'].includes(block.type)) {
-    const line=block.type==='screen_text_line',size=line?24:num('SIZE'),x=line?0:num('X'),y=line?(num('ROW')-1)*24:num('Y');
-    if(line||f('CLEAR')==='YES'){ctx.fillStyle=c.background||'#fff';ctx.fillRect(x,y,240-x,320-y)}
+    const line=block.type==='screen_text_line',size=line?24:num('SIZE'),x=line?9:num('X'),y=line?(num('ROW')-1)*24+5:num('Y');
+    if(line&&(num('ROW')<1||num('ROW')>(c.height===320?13:9)))return true;
+    if(line||f('CLEAR')==='YES'){const left=line?0:x,height=line?24:c.height-y;if(window.K10Vision?.displaying())ctx.clearRect(left,y,c.width-left,height);else{ctx.fillStyle=c.background||'#fff';ctx.fillRect(left,y,c.width-left,height)}}
     ctx.fillStyle=f('COLOR');ctx.font=`${size}px "Microsoft YaHei",sans-serif`;ctx.textBaseline='top';
     const chars=Array.from(String(v('TEXT'))),wrap=line?50:num('WRAP');let dx=x,dy=y,count=0;
     for(const ch of chars){if(ch==='\n'||(wrap<50&&count>=wrap)){dx=x;dy+=size;count=0;if(ch==='\n')continue}ctx.fillText(ch,dx,dy);dx+=ctx.measureText(ch).width;count++}

@@ -38,7 +38,7 @@ let runStartedAt = 0;
 let runTimer = null;
 let eventTimers = new Set();
 let activeBlock = null;
-let displayMode = 'welcome';
+let displayMode = 'idle';
 const pendingButtonPresses = new Set();
 const buttonReleaseTimers = new Map();
 let activeButtonSnapshot = null;
@@ -202,11 +202,18 @@ function initBlockly() {
   // Keep the quote marks inside the white string reporter. Blockly's stock
   // quote images reserve their original width even when visually scaled.
   class CompactStringInput extends Blockly.FieldTextInput {
+    positionTextElement_(...args){
+      super.positionTextElement_(...args);
+      this.textElement_?.setAttribute('x',String(this.size_.width/2));
+      this.textElement_?.setAttribute('text-anchor','middle');
+    }
     updateSize_(...args){
       super.updateSize_(...args);
       // Blockly reserves generous editor padding; the surrounding quote fields
       // already provide the visual spacing for this literal.
       this.size_.width=Math.max(22,this.size_.width-14);
+      this.size_.height=this.getConstants().FIELD_TEXT_HEIGHT;
+      this.positionTextElement_(0,0);
       this.positionBorderRect_();
     }
   }
@@ -218,6 +225,22 @@ function initBlockly() {
     this.setOutput(true,'String');
     this.setTooltip('文本');
   }};
+  // Give string literals a thinner capsule without scaling their text or
+  // changing the geometry of numbers and other reporter blocks.
+  class CompactStringRenderInfo extends Blockly.zelos.RenderInfo {
+    createRows_(){
+      super.createRows_();
+      this.topRow.minHeight=2;
+      this.bottomRow.minHeight=2;
+      for(const row of this.inputRows)row.minHeight=24;
+    }
+  }
+  class BoardLabRenderer extends Blockly.zelos.Renderer {
+    makeRenderInfo_(block){
+      return block.type==='text'?new CompactStringRenderInfo(this,block):super.makeRenderInfo_(block);
+    }
+  }
+  Blockly.blockRendering.register('boardlab',BoardLabRenderer);
   Object.keys(Blockly.Blocks).filter(type => /^(logic_|math_|text)/.test(type)||/^(variables_|procedures_|lists_)/.test(type)).forEach(type => {
     const definition = Blockly.Blocks[type];
     if (!definition?.init) return;
@@ -262,10 +285,10 @@ function initBlockly() {
     startHats:true
   });
   blocklyWorkspace = Blockly.inject('blocklyDiv', {
-    toolbox: continuousDefinition(), theme, renderer:'zelos', trashcan:false, sounds:true,
+    toolbox: continuousDefinition(), theme, renderer:'boardlab', trashcan:false, sounds:true,
     plugins:{flyoutsVerticalToolbox:ContinuousFlyout},
     rendererOverrides:{MIN_BLOCK_HEIGHT:34,EMPTY_INLINE_INPUT_HEIGHT:26,DUMMY_INPUT_MIN_HEIGHT:26,FIELD_BORDER_RECT_Y_PADDING:3,EMPTY_STATEMENT_INPUT_HEIGHT:32,STATEMENT_INPUT_SPACER_MIN_WIDTH:176,STATEMENT_INPUT_PADDING_LEFT:20,BOTTOM_ROW_AFTER_STATEMENT_MIN_HEIGHT:26},
-    move:{scrollbars:true,drag:true,wheel:true}, zoom:{controls:false,wheel:true,startScale:.8,maxScale:1.25,minScale:.5,scaleSpeed:1.12,pinch:true},
+    move:{scrollbars:true,drag:true,wheel:true}, zoom:{controls:false,wheel:true,startScale:.8,maxScale:1.25,minScale:.05,scaleSpeed:1.12,pinch:true},
     grid:{spacing:22,length:1,colour:'#dde2e8',snap:false}
   });
   installReferenceEditing(blocklyWorkspace);
@@ -354,10 +377,11 @@ function connectChain(types, fields = []) {
 function serializedChain(items, x, y) {
   let root;
   let cursor;
-  items.forEach(({type,fields})=>{
+  items.forEach(({type,fields,inputs})=>{
     const node={type};
     if(fields)node.fields={...fields};
-    if(['screen_text','speak_text'].includes(type)&&fields?.TEXT!==undefined){node.inputs={TEXT:{shadow:{type:'text',fields:{TEXT:fields.TEXT}}}};delete node.fields.TEXT;}
+    if(inputs)node.inputs=structuredClone(inputs);
+    if(['screen_text','screen_text_line','speak_text'].includes(type)&&fields?.TEXT!==undefined){node.inputs={TEXT:{shadow:{type:'text',fields:{TEXT:fields.TEXT}}}};delete node.fields.TEXT;}
     if(!root){root=node;root.x=x;root.y=y;}else cursor.next={block:node};
     cursor=node;
   });
@@ -368,13 +392,13 @@ function createExample(boardId, exampleId = 'hello') {
   if(boardId==='m10'){createM10Example(exampleId);return;}
   const examples = {
     hello: [
-      serializedChain([{type:'board_start'},{type:'screen_text',fields:{TEXT:'你好，创客！',COLOR:'#ffffff'}},{type:'rgb_rainbow'}],290,55),
+      serializedChain([{type:'board_start'},{type:'screen_clear',fields:{COLOR:'#000000'}},{type:'screen_text_line',fields:{TEXT:'你好，创客！',ROW:1,COLOR:'#ffffff'}},{type:'screen_update'},{type:'rgb_rainbow'}],290,55),
       serializedChain([{type:'button_event',fields:{BUTTON:'A'}},{type:'rgb_set',fields:{COLOR:'#ff5d8f'}}],290,370)
     ],
-    display: [serializedChain([{type:'board_start'},{type:'screen_clear',fields:{COLOR:'#000000'}},{type:'screen_text_line',fields:{ROW:1,COLOR:'#ffffff'},inputs:{TEXT:{block:{type:'text',fields:{TEXT:'K10 屏幕'}}}}},{type:'screen_point',fields:{X:120,Y:160,COLOR:'#20cfaf'}},{type:'screen_update'}],290,55)],
+    display: [serializedChain([{type:'board_start'},{type:'screen_clear',fields:{COLOR:'#000000'}},{type:'screen_text_line',fields:{ROW:1,COLOR:'#ffffff'},inputs:{TEXT:{shadow:{type:'text',fields:{TEXT:'行空板'}}}}},{type:'screen_point',fields:{X:120,Y:160,COLOR:'#20cfaf'}},{type:'screen_update'}],290,55)],
     rgb: [serializedChain([{type:'board_start'},{type:'rgb_rainbow'},{type:'board_wait',fields:{SECONDS:1}},{type:'rgb_off'}],290,55)],
     button: [
-      serializedChain([{type:'board_start'},{type:'screen_text',fields:{TEXT:'请按 A 或 B',COLOR:'#ffffff'}}],290,55),
+      serializedChain([{type:'board_start'},{type:'screen_clear',fields:{COLOR:'#000000'}},{type:'screen_text_line',fields:{TEXT:'请按 A 或 B',ROW:1,COLOR:'#ffffff'}},{type:'screen_update'}],290,55),
       serializedChain([{type:'button_event',fields:{BUTTON:'A'}},{type:'rgb_set',fields:{COLOR:'#ff5d8f'}}],290,220),
       serializedChain([{type:'button_event',fields:{BUTTON:'B'}},{type:'rgb_set',fields:{COLOR:'#4c7ee8'}}],290,360)
     ],
@@ -590,7 +614,7 @@ async function runProgram(startPaused=false) {
     handlers=nextWorkspace.getTopBlocks(false).filter(b=>(currentBoard==='m10'?['m10_touch_event','m10_key_event']:['button_event','tilt_event']).includes(b.type)&&b.getNextBlock());
   } catch(error) {nextWorkspace.dispose();console.error('程序快照失败',error);toast('程序无法运行，请检查积木');return;}
   if (!roots.length && !handlers.length) {nextWorkspace.dispose();toast('先从左侧拖出积木并拼接程序');return;}
-  stopProgram(false); runtimeVariables.clear(); resetVirtualRuntime();
+  stopProgram(false); runtimeVariables.clear(); resetVirtualRuntime();initializeK10Screen(nextWorkspace);
   const requestId=++runRequestId;
   runtimeWorkspace=nextWorkspace;hasRunProgram=true;programDirty=false;
   $('#restartBtn').disabled=false;$('#restartBtn').classList.remove('needs-restart');
@@ -639,13 +663,13 @@ function stopProgram(writeLog = true) {
 
 function resetBoardDisplay(){
   if(currentBoard==='m10'&&typeof m10Reset==='function'){m10Reset();return;}
-  screenBuffer=null;screenLineWidth=1;displayMode='welcome';
+  screenBuffer=null;screenLineWidth=1;displayMode='idle';
   setRgb(['#000000','#000000','#000000']);
   const lcd=$('#lcd'),content=$('#lcdContent');
   if(lcd)lcd.style.background='';
   if(content){
-    content.style.transform='';
-    content.innerHTML='<span class="lcd-kicker">K10 READY</span><strong>你好，创客！</strong><p>点击“运行”开始仿真</p>';
+    for(const key of ['width','height','left','top','transform'])content.style[key]='';
+    content.innerHTML='';
   }
   $('#buttonA')?.classList.remove('pressed');
   $('#buttonB')?.classList.remove('pressed');
@@ -658,7 +682,7 @@ function executeBlock(block) {
   switch (block.type) {
     case 'screen_text': displayMode='text'; setScreen(String(blockValue(block.getInputTargetBlock('TEXT'))||''),'',value('COLOR')); break;
     case 'screen_sensors': displayMode='environment'; showSensorScreen(); break;
-    case 'screen_clear': {const c=getScreenBuffer();c.background=value('COLOR');const ctx=c.getContext('2d');if(window.K10Vision?.displaying())ctx.clearRect(0,0,240,320);else{ctx.fillStyle=c.background;ctx.fillRect(0,0,240,320);}presentScreenBuffer();break;}
+    case 'screen_clear': {const c=getScreenBuffer();c.background=value('COLOR');const ctx=c.getContext('2d');if(window.K10Vision?.displaying())ctx.clearRect(0,0,c.width,c.height);else{ctx.fillStyle=c.background;ctx.fillRect(0,0,c.width,c.height);}presentScreenBuffer();break;}
     case 'rgb_set': setRgb([value('COLOR'),value('COLOR'),value('COLOR')]); break;
     case 'rgb_rainbow': setRgb(['#ff5d8f','#2fe0b6','#4a78ff']); break;
     case 'rgb_off': writeK10Rgb(value('LED')||'all','#000000');break;
@@ -706,9 +730,9 @@ function renderSimulator(boardId) {
   }
   $('.sensor-panel').hidden=false;
   if(boardId==='m10'){renderM10Simulator();return;}
-  displayMode = 'welcome';
+  displayMode = 'idle';
   const stage = $('#simStage');
-  stage.innerHTML = `<div class="board-frame"><div class="k10-board" aria-label="行空板 K10 正面仿真"><div class="lcd" id="lcd"><div class="lcd-grid"></div><div class="lcd-content" id="lcdContent"><span class="lcd-kicker">K10 READY</span><strong>你好，创客！</strong><p>点击“运行”开始仿真</p></div></div></div><div class="rgb-row" aria-label="三颗 RGB 灯"><span id="led0"></span><span id="led1"></span><span id="led2"></span></div></div><div class="board-controls"><div class="hardware-control"><button class="hardware-btn" id="buttonA" type="button"><b>A</b><span>按键</span></button><button class="key-map" data-button="A" type="button">键盘 <kbd id="keyA">A</kbd></button></div><div class="hardware-control"><button class="hardware-btn" id="buttonB" type="button"><b>B</b><span>按键</span></button><button class="key-map" data-button="B" type="button">键盘 <kbd id="keyB">B</kbd></button></div><button class="hardware-btn reset" id="boardReset" type="button"><b>↻</b><span>复位</span></button></div>`;
+  stage.innerHTML = `<div class="board-frame"><div class="k10-board" aria-label="行空板 K10 正面仿真"><div class="lcd" id="lcd"><div class="lcd-content" id="lcdContent"></div></div></div><div class="rgb-row" aria-label="三颗 RGB 灯"><span id="led0"></span><span id="led1"></span><span id="led2"></span></div></div><div class="board-controls"><div class="hardware-control"><button class="hardware-btn" id="buttonA" type="button"><b>A</b><span>按键</span></button><button class="key-map" data-button="A" type="button">键盘 <kbd id="keyA">A</kbd></button></div><div class="hardware-control"><button class="hardware-btn" id="buttonB" type="button"><b>B</b><span>按键</span></button><button class="key-map" data-button="B" type="button">键盘 <kbd id="keyB">B</kbd></button></div><button class="hardware-btn reset" id="boardReset" type="button"><b>↻</b><span>复位</span></button></div>`;
   stage.insertAdjacentHTML('beforeend','<div class="module-dock" id="moduleDock" hidden></div>');
   renderModuleDock();
   bindBoardControls(); renderKeyMap(); renderSensorPanel();
@@ -724,7 +748,7 @@ function renderSensorPanel() {
     selectedModules.includes('servo') ? `<label><span>舵机角度 <output id="servoOut">${sensorState.servo}°</output></span><input id="servoInput" type="range" min="0" max="180" value="${sensorState.servo}"></label>` : ''
   ].join('');
   if (currentBoard === 'arduino') panel.innerHTML = `<div class="sensor-tabs"><button class="active" type="button">引脚与扩展模块</button></div><div class="sensor-page active" id="environmentSensors"><label><span>模拟 A0 <output id="analogOut">${sensorState.analog}</output></span><input id="analogInput" type="range" min="0" max="1023" value="${sensorState.analog}"></label><label><span>数字 D2 <output id="digitalOut">${sensorState.digital}</output></span><input id="digitalRange" type="range" min="0" max="1" value="${sensorState.digital}"></label>${moduleInputs}</div>`;
-  else panel.innerHTML = `<div class="sensor-tabs"><button class="active" data-sensor-tab="environment" type="button">虚拟环境输入</button><button data-sensor-tab="motion" type="button">虚拟姿态</button></div><p class="sensor-help" id="sensorHelp">拖动滑杆或输入固定数值模拟 K10 板载传感器；程序运行时可实时调整虚拟环境。</p><div class="sensor-page active" id="environmentSensors">${sensorControl('temp','温度',-10,50,'°C')}${currentBoard==='k10'?sensorControl('humidity','湿度',0,100,'%')+sensorControl('light','环境光',0,2000,'lx'):''}${moduleInputs}</div><div class="sensor-page" id="motionSensors"><div class="tilt-pad"><button data-tilt="forward" type="button">↑<small>前倾</small></button><button data-tilt="left" type="button">←<small>左倾</small></button><button data-tilt="flat" class="flat ${sensorState.tilt==='flat'?'active':''}" type="button">●<small>平放</small></button><button data-tilt="right" type="button">→<small>右倾</small></button><button data-tilt="back" type="button">↓<small>后倾</small></button></div><div class="axis-values"><span>X <b id="axisX">${sensorState.x}</b></span><span>Y <b id="axisY">${sensorState.y}</b></span><span>Z <b id="axisZ">${sensorState.z}</b></span></div></div>`;
+  else panel.innerHTML = `<div class="sensor-tabs"><button class="active" data-sensor-tab="environment" type="button">虚拟环境输入</button><button data-sensor-tab="motion" type="button">虚拟姿态</button></div><div class="sensor-page active" id="environmentSensors">${sensorControl('temp','温度',-10,50,'°C')}${currentBoard==='k10'?sensorControl('humidity','湿度',0,100,'%')+sensorControl('light','环境光',0,2000,'lx'):''}${moduleInputs}</div><div class="sensor-page" id="motionSensors"><div class="tilt-pad"><button data-tilt="forward" type="button">↑<small>前倾</small></button><button data-tilt="left" type="button">←<small>左倾</small></button><button data-tilt="flat" class="flat ${sensorState.tilt==='flat'?'active':''}" type="button">●<small>平放</small></button><button data-tilt="right" type="button">→<small>右倾</small></button><button data-tilt="back" type="button">↓<small>后倾</small></button></div><div class="axis-values"><span>X <b id="axisX">${sensorState.x}</b></span><span>Y <b id="axisY">${sensorState.y}</b></span><span>Z <b id="axisZ">${sensorState.z}</b></span></div></div>`;
   if (currentBoard === 'k10' && moduleInputs) {
     const extraLabels = [...$('#environmentSensors').querySelectorAll('label')].slice(3);
     const details = document.createElement('details');
@@ -755,7 +779,7 @@ function bindSensorControls() {
   $('#servoInput')?.addEventListener('input',e=>{sensorState.servo=Number(e.target.value);$('#servoOut').textContent=`${e.target.value}°`;renderModuleDock();});
   $('#analogInput')?.addEventListener('input',e=>{sensorState.analog=Number(e.target.value); $('#analogOut').textContent=e.target.value;});
   $('#digitalRange')?.addEventListener('input',e=>{sensorState.digital=Number(e.target.value); $('#digitalOut').textContent=e.target.value;});
-  $$('[data-sensor-tab]').forEach(button=>button.addEventListener('click',()=>{$$('[data-sensor-tab]').forEach(x=>x.classList.toggle('active',x===button)); $$('.sensor-page').forEach(x=>x.classList.remove('active')); const environment=button.dataset.sensorTab==='environment'; $(`#${environment?'environmentSensors':'motionSensors'}`).classList.add('active'); $('#sensorHelp').textContent=environment?'拖动滑杆或输入固定数值模拟 K10 板载传感器；程序运行时可实时调整虚拟环境。':'选择倾斜方向，触发“当主板倾斜时”积木；X、Y、Z 显示对应的模拟姿态。';}));
+  $$('[data-sensor-tab]').forEach(button=>button.addEventListener('click',()=>{$$('[data-sensor-tab]').forEach(x=>x.classList.toggle('active',x===button)); $$('.sensor-page').forEach(x=>x.classList.remove('active')); const environment=button.dataset.sensorTab==='environment'; $(`#${environment?'environmentSensors':'motionSensors'}`).classList.add('active');}));
   $$('[data-tilt]').forEach(button=>button.addEventListener('click',()=>{const tilt=button.dataset.tilt; sensorState.tilt=tilt; const axes={flat:[0,0,1000],forward:[0,720,690],back:[0,-720,690],left:[-720,0,690],right:[720,0,690]}[tilt]; [sensorState.x,sensorState.y,sensorState.z]=axes; $$('#motionSensors button').forEach(x=>x.classList.toggle('active',x===button)); $('#axisX').textContent=axes[0]; $('#axisY').textContent=axes[1]; $('#axisZ').textContent=axes[2]; log('姿态',button.querySelector('small').textContent); triggerTilt(tilt);}));
 }
 
@@ -807,7 +831,7 @@ function executeConnected(block){
   runtimeDebugger.add(runStack(block));
 }
 
-function setScreen(title,subtitle='',color='#fff',background=null){if(!$('#lcd'))return;pendingScreenFrame=null;if(background)$('#lcd').style.background=background;$('#lcdContent').innerHTML=title?`<span class="lcd-kicker">BOARDLAB · LIVE</span><strong style="color:${color}">${escapeHtml(title)}</strong>${subtitle?`<p>${escapeHtml(subtitle)}</p>`:''}`:'';}
+function setScreen(title,subtitle='',color='#fff',background=null){if(!$('#lcd'))return;pendingScreenFrame=null;if(background)$('#lcd').style.background=background;$('#lcdContent').innerHTML=title?`<strong style="color:${color}">${escapeHtml(title)}</strong>${subtitle?`<p>${escapeHtml(subtitle)}</p>`:''}`:'';}
 function showSensorScreen(){if(!$('#lcd'))return;pendingScreenFrame=null;$('#lcd').style.background='linear-gradient(145deg,#0c6b83,#26355f)';$('#lcdContent').innerHTML=`<span class="lcd-kicker">ENVIRONMENT</span><strong>环境数据</strong><div class="sensor-readings"><span><em>温度</em><b>${sensorState.temp}<small>℃</small></b></span><span><em>湿度</em><b>${sensorState.humidity}<small>%</small></b></span><span><em>环境光</em><b>${sensorState.light}<small> lx</small></b></span></div>`;}
 function setRgb(colors){colors.forEach((color,index)=>writeK10Rgb(index,color));}
 function showMicrobitIcon(icon){const patterns={heart:[1,3,5,6,7,8,9,11,12,13,17],smile:[6,8,16,19,22,23,24],yes:[4,8,12,16,20,21],no:[0,4,6,8,12,16,18,20,24],text:[2,7,12,17,22]};const on=patterns[icon]||patterns.heart;$$('#microbitLeds i').forEach((led,index)=>led.classList.toggle('on',on.includes(index)));}
@@ -823,7 +847,7 @@ function selectBoard(boardId, closeAfter = true) {
   if (!boardProfiles[boardId]) return;
   if(boardId!==currentBoard)saveWorkspace();
   const changed=boardId!==currentBoard || !k10Added; k10Added=true; localStorage.setItem('boardlab-k10-added','true');hasRunProgram=false;programDirty=false;$('#restartBtn').classList.remove('needs-restart');stopProgram(false); currentBoard=boardId; localStorage.setItem('boardlab-board',boardId);
-  $('#resetProgram').disabled=false; $('#runBtn').disabled=currentMode!=='virtual'; $('#simBoardName').textContent=boardProfiles[boardId].simName;
+  $('#resetProgram').disabled=false; $('#runBtn').disabled=currentMode!=='virtual'; $('#simBoardName').textContent=boardProfiles[boardId].name;
   $('.sim-panel').setAttribute('aria-label',boardProfiles[boardId].simName);
   $('[data-view="code"]').textContent='代码';
   updateExampleMenu();m10ImageEditor?.remove();m10ImageEditor=null;
@@ -873,14 +897,16 @@ function setExtensionTab(tab) {
   $$('#extensionTabs button').forEach(button=>button.classList.toggle('active',button.dataset.extensionTab===tab));
   renderExtensionLibrary();
 }
-function openExtensions(tab='board'){extensionActiveTab=tab;$('#boardSearch').value='';setExtensionTab(tab);$('#extensionsModal').hidden=false;$('#examplesPopover').hidden=true;setTimeout(()=>$('#boardSearch').focus(),40);}
+function openExtensions(tab='board'){extensionActiveTab=tab;$('#boardSearch').value='';setExtensionTab(tab);$('#extensionsModal').hidden=false;closeExampleMenu();setTimeout(()=>$('#boardSearch').focus(),40);}
 function closeExtensions(){$('#extensionsModal').hidden=true;}
 
 $$('.tab').forEach(button=>button.addEventListener('click',()=>{$$('.tab').forEach(x=>{x.classList.toggle('active',x===button);x.setAttribute('aria-selected',x===button);});const code=button.dataset.view==='code';$('#blocksView').hidden=code;$('#codeView').hidden=!code;if(!code)setTimeout(()=>Blockly.svgResize(blocklyWorkspace));updateCode();}));
 $('#codeLanguage').addEventListener('change',updateCode);
 $('#runBtn').addEventListener('click',()=>runProgram());$('#restartBtn').addEventListener('click',()=>runProgram());$('#stopBtn').addEventListener('click',()=>stopProgram(true));
-$('#pauseBtn').addEventListener('click',pauseRuntimeProgram);$('#stepBtn').addEventListener('click',stepRuntimeProgram);
-$('#resetProgram').addEventListener('click',()=>{const menu=$('#examplesPopover');menu.hidden=!menu.hidden;});
+function closeExampleMenu(){$('#examplesPopover').hidden=true;$('#resetProgram').setAttribute('aria-expanded','false');}
+$('#resetProgram').setAttribute('aria-expanded','false');
+$('#resetProgram').addEventListener('click',()=>{const menu=$('#examplesPopover');menu.hidden=!menu.hidden;$('#resetProgram').setAttribute('aria-expanded',String(!menu.hidden));});
+document.addEventListener('pointerdown',event=>{if(!$('#examplesPopover').contains(event.target)&&!$('#resetProgram').contains(event.target))closeExampleMenu();},true);
 function updateExampleMenu(){
   $('#examplesPopover header b').textContent=currentBoard==='m10'?'M10 示例':'K10 示例';
   $('#factoryExampleBtn').hidden=currentBoard!=='k10';
@@ -888,7 +914,7 @@ function updateExampleMenu(){
   const labels=currentBoard==='m10'?['Hello M10 · 触屏','屏幕图形','L 灯闪烁','A / B / A+B','光控 L 灯','环境光读取']:['Hello K10','屏幕显示','RGB 灯光','按键交互','智能夜灯','环境数据'];
   $$('[data-example]').forEach((button,index)=>{button.hidden=button.dataset.example==='image'?currentBoard!=='m10':button.dataset.example==='face'?currentBoard!=='k10':false;button.querySelector('b').textContent=button.dataset.example==='face'?'人脸识别 · A 学习 / B 遗忘':button.dataset.example==='image'?'本地图片':labels[index]||'本地图片';});
 }
-$$('[data-example]').forEach(button=>button.addEventListener('click',()=>{blocklyWorkspace.clear();createExample(currentBoard,button.dataset.example);markProgramModified();updateCode();$('#examplesPopover').hidden=true;toast(`已载入「${button.querySelector('b').textContent}」示例`);}));
+$$('[data-example]').forEach(button=>button.addEventListener('click',()=>{blocklyWorkspace.clear();createExample(currentBoard,button.dataset.example);markProgramModified();updateCode();closeExampleMenu();toast(`已载入「${button.querySelector('b').textContent}」示例`);}));
 bindK10FactoryExample();
 bindK10FactoryBlocks();
 $('#copyCode').addEventListener('click',async()=>{await navigator.clipboard.writeText($('#pythonCode').textContent);toast('代码已复制');});
@@ -936,7 +962,7 @@ $('#captureBtn').addEventListener('click',()=>{
 $('#boardGrid').addEventListener('click',event=>{const card=event.target.closest('.board-card');if(!card)return;if(card.dataset.board)selectBoard(card.dataset.board,true);if(card.dataset.module)toggleModule(card.dataset.module);if(card.dataset.upcoming)toast(`${upcomingBoardCatalog[card.dataset.upcoming].name} 正在适配仿真与积木`);});
 $$('#extensionTabs button').forEach(button=>button.addEventListener('click',()=>setExtensionTab(button.dataset.extensionTab)));
 $('#boardSearch').addEventListener('input',renderExtensionLibrary);
-document.addEventListener('keydown',event=>{if(event.key==='Escape'){if(!$('#extensionsModal').hidden){closeExtensions();return;}$('#examplesPopover').hidden=true;}if(keyMappingTarget){event.preventDefault();const other=keyMappingTarget==='A'?'B':'A';if(event.key.toLowerCase()===keyMap[other]){toast(`这个键已经绑定到按键 ${other}`);return;}keyMap[keyMappingTarget]=event.key.toLowerCase();log('键位',`按键 ${keyMappingTarget} → ${event.key===' '?'空格':event.key.toUpperCase()}`);keyMappingTarget=null;$$('.key-map').forEach(x=>x.classList.remove('listening'));renderKeyMap();localStorage.setItem('boardlab-keymap',JSON.stringify(keyMap));return;}if(event.target.matches('input,textarea,select,.blocklyHtmlInput'))return;if(event.key.toLowerCase()===keyMap.A){event.preventDefault();document.activeElement?.blur();if(!event.repeat)triggerButton('A','DOWN',true);}if(event.key.toLowerCase()===keyMap.B){event.preventDefault();document.activeElement?.blur();if(!event.repeat)triggerButton('B','DOWN',true);}if((event.ctrlKey||event.metaKey)&&event.key==='Enter')runProgram();});
+document.addEventListener('keydown',event=>{if(event.key==='Escape'){if(!$('#extensionsModal').hidden){closeExtensions();return;}closeExampleMenu();}if(keyMappingTarget){event.preventDefault();const other=keyMappingTarget==='A'?'B':'A';if(event.key.toLowerCase()===keyMap[other]){toast(`这个键已经绑定到按键 ${other}`);return;}keyMap[keyMappingTarget]=event.key.toLowerCase();log('键位',`按键 ${keyMappingTarget} → ${event.key===' '?'空格':event.key.toUpperCase()}`);keyMappingTarget=null;$$('.key-map').forEach(x=>x.classList.remove('listening'));renderKeyMap();localStorage.setItem('boardlab-keymap',JSON.stringify(keyMap));return;}if(event.target.matches('input,textarea,select,.blocklyHtmlInput'))return;if(event.key.toLowerCase()===keyMap.A){event.preventDefault();document.activeElement?.blur();if(!event.repeat)triggerButton('A','DOWN',true);}if(event.key.toLowerCase()===keyMap.B){event.preventDefault();document.activeElement?.blur();if(!event.repeat)triggerButton('B','DOWN',true);}if((event.ctrlKey||event.metaKey)&&event.key==='Enter')runProgram();});
 
 try { if(navigator.modelContext?.registerTool){navigator.modelContext.registerTool({name:'select_virtual_board',description:'选择已支持的虚拟主板。',inputSchema:{type:'object',properties:{board:{type:'string',enum:['k10','m10']}},required:['board'],additionalProperties:false},execute:async({board})=>{selectBoard(board);return{content:[{type:'text',text:`已选择 ${boardProfiles[board].name}。`}]};}});navigator.modelContext.registerTool({name:'run_board_program',description:'运行当前图形化积木程序。',inputSchema:{type:'object',properties:{},additionalProperties:false},execute:async()=>{runProgram();return{content:[{type:'text',text:'程序已开始运行。'}]};}});navigator.modelContext.registerTool({name:'stop_board_program',description:'停止当前虚拟主板程序。',inputSchema:{type:'object',properties:{},additionalProperties:false},execute:async()=>{stopProgram(true);return{content:[{type:'text',text:'程序已停止。'}]};}});}}catch(error){console.debug('WebMCP unavailable',error);}
 

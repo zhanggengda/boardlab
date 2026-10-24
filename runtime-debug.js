@@ -72,22 +72,6 @@ function createRuntimeDebugger(paused=false) {
   });
 }
 function renderRuntimeDebug() {
-  const pause=$('#pauseBtn'),step=$('#stepBtn');
-  if(!pause||!step)return;
   const paused=!!runtimeDebugger?.paused;
-  pause.disabled=!programArmed;const caption=paused?'继续':'暂停';if(pause.textContent!==caption)pause.textContent=caption;pause.setAttribute('aria-pressed',String(paused));
-  step.disabled=currentMode!=='virtual'||!k10Added||$('#runBtn').disabled&& !programArmed;
   if(programArmed){const status=$('#simStatus'),text=paused?(programDirty?'已暂停 · 请重新运行':'已暂停'):(running?'运行中':'等待事件')+(programDirty?' · 请重新运行':'');status.className=paused?'stopped':'running';if(status.textContent!==text)status.textContent=text;}
-}
-function pauseRuntimeProgram() {
-  if(!programArmed||!runtimeDebugger)return;
-  if(runtimeDebugger.paused)runtimeDebugger.resume();else runtimeDebugger.pause();
-  if(runtimeDebugger.paused)flushScreenFrame();
-  renderRuntimeDebug(true);
-}
-async function stepRuntimeProgram() {
-  if(!programArmed)await runProgram(true);
-  if(!programArmed||!runtimeDebugger)return;
-  runtimeDebugger.step();renderRuntimeDebug(true);
-  if(!runtimeDebugger.tasks.size&&programArmed)toast('等待按键或触屏事件，再点击单步');
 }

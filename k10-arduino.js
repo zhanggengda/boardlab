@@ -8,6 +8,7 @@ function generateK10Arduino(workspace) {
   let usesMusic = false;
   let usesSD = false;
   let repeatIndex = 0;
+  let screenDirection = 2;
   const field = (block, name) => block.getFieldValue(name);
   const number = (block, name) => Number(field(block, name)) || 0;
   const color = value => `0x${String(value || '#000000').replace('#', '').toUpperCase()}`;
@@ -68,6 +69,7 @@ function generateK10Arduino(workspace) {
     ];
     switch (block.type) {
       case 'board_wait': return [`${pad}delay(${Math.max(0, Math.round(number(block, 'SECONDS') * 1000))});`];
+      case 'screen_orientation': screenDirection=({'0':2,'90':3,'180':0,'270':1})[f('DIRECTION')]??2;return [];
       case 'board_repeat': {
         const counter = `_boardlabRepeat${++repeatIndex}`;
         return [`${pad}for (int ${counter} = 0; ${counter} < ${number(block, 'COUNT')}; ++${counter}) {`, ...body('DO'), `${pad}}`];
@@ -142,7 +144,7 @@ function generateK10Arduino(workspace) {
     '// 板演 · K10 Arduino C++ 预览（尚未经过本机 K10 编译验证）',
     ...(issues.length ? ['#error BoardLab_K10_Arduino_generation_incomplete'] : []),
     '#include "unihiker_k10.h"', ...(images.length ? ['#include "arduino_image_cache.h"'] : []), '',
-    'UNIHIKER_K10 k10;', ...(usesMusic ? ['Music music;'] : []), 'uint8_t screen_dir = 2;', '',
+    'UNIHIKER_K10 k10;', ...(usesMusic ? ['Music music;'] : []), `uint8_t screen_dir = ${screenDirection};`, '',
     'void setup() {', '  k10.begin();', '  k10.initScreen(screen_dir);', '  k10.creatCanvas();', ...(usesSD ? ['  k10.initSDFile();'] : []), ...setup, '}', '',
     'void loop() {', ...loop, '  delay(1);', '}', ''
   ].join('\n');

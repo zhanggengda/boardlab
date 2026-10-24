@@ -149,7 +149,7 @@ function m10CreateObject(name,kind,props){
   // Recreating the same name leaves the earlier GUI object on screen, just as Python assignment does.
   m10Scene.add(obj);m10Objects.set(name,obj);m10RenderObject(obj);return obj;
 }
-function m10Reset(welcome=true){
+function m10Reset(welcome=false){
   m10StopTone();m10Objects.clear();m10Scene.clear();
   const screen=$('#m10Screen');screen?.replaceChildren();
   if(welcome&&screen){const text=document.createElementNS('http://www.w3.org/2000/svg','text');text.id='m10Welcome';text.setAttribute('x','120');text.setAttribute('y','155');text.setAttribute('text-anchor','middle');text.setAttribute('fill','#64758d');text.setAttribute('font-size','17');text.textContent='M10 · 点击运行';screen.append(text);}
@@ -199,7 +199,7 @@ function renderM10Simulator(){
 }
 function renderM10Sensors(){
   const controls=[['light','环境光原始值',0,4095,1],['sound','麦克风声强（0–100）',0,100,.1],['ax','加速度 X',-16,16,.01],['ay','加速度 Y',-16,16,.01],['az','加速度 Z',-16,16,.01],['gx','陀螺仪 X',-35,35,.01],['gy','陀螺仪 Y',-35,35,.01],['gz','陀螺仪 Z',-35,35,.01]];
-  $('.sensor-panel').innerHTML=`<div class="sensor-tabs"><button class="active" type="button">M10 虚拟输入</button></div><p class="sensor-help">输入固定值模拟官方库返回值。M10 不带板载温湿度、RGB 灯或摄像头。</p><div class="m10-sensor-grid">${controls.map(([name,label,min,max,step])=>`<label>${label}<input type="number" value="${m10Sensors[name]}" min="${min}" max="${max}" step="${step}" data-m10-sensor="${name}" aria-label="${label}固定值"></label>`).join('')}</div>`;
+  $('.sensor-panel').innerHTML=`<div class="sensor-tabs"><button class="active" type="button">M10 虚拟输入</button></div><div class="m10-sensor-grid">${controls.map(([name,label,min,max,step])=>`<label>${label}<input type="number" value="${m10Sensors[name]}" min="${min}" max="${max}" step="${step}" data-m10-sensor="${name}" aria-label="${label}固定值"></label>`).join('')}</div>`;
   $$('[data-m10-sensor]').forEach(input=>input.addEventListener('change',()=>{const value=Number(input.value),name=input.dataset.m10Sensor;if(input.value===''||!Number.isFinite(value)){input.value=m10Sensors[name];return;}m10Sensors[name]=Math.max(Number(input.min),Math.min(Number(input.max),value));input.value=m10Sensors[name];}));
 }
 

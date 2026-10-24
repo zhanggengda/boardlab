@@ -86,8 +86,9 @@
     })();
   }
   function fresh() { return state.video && !state.suspended && performance.now() - state.lastFrame < 500 && state.video.readyState >= 2; }
+  function faceDirectionAllowed() { return typeof getK10ScreenSize !== 'function' || getK10ScreenSize().angle === 0; }
   function currentFace() {
-    return state.source !== 'simulation' && state.mode === '人脸检测' && fresh() && performance.now() - state.faceAt < 1000 ? state.face : null;
+    return faceDirectionAllowed() && state.source !== 'simulation' && state.mode === '人脸检测' && fresh() && performance.now() - state.faceAt < 1000 ? state.face : null;
   }
   function stopFrameWatch() { if (frameCallback !== null) state.video?.cancelVideoFrameCallback?.(frameCallback); frameCallback = null; }
   function watchFrames(video, epoch) {
@@ -180,27 +181,29 @@
       pollTimer = null; if (!state.stream || state.suspended || state.source === 'simulation') return;
       const epoch = state.sourceEpoch;
       state.video?._visionCheck?.();
-      if (state.mode === '人脸检测' && fresh() && !state.busy && !state.inference) {
+      if (faceDirectionAllowed() && state.mode === '人脸检测' && fresh() && !state.busy && !state.inference) {
         try { await infer(); if (!state.busy && !(performance.now() < state.noticeUntil)) status(state.faces.length ? `检测到 ${state.faces.length} 张人脸${state.faces.length > 1 ? ' · 学习和识别需要单人画面' : ''}` : '没有检测到人脸，请调整距离和光线'); }
         catch (e) { if (epoch === state.sourceEpoch && !state.busy) status(e.message); }
       } else if (!fresh() && performance.now() - state.lastFrame > 2000) { state.face = null; status('画面中断，请保持手机亮屏或重新开启摄像头'); }
       if (epoch === state.sourceEpoch) scheduleDetection();
     }, 180);
   }
+  const screenSize = () => typeof getK10ScreenSize === 'function' ? getK10ScreenSize() : {width:240,height:320};
   function ensureCanvas() {
     const lcd = el('lcdContent'); if (!lcd) return null;
     let canvas = lcd.querySelector(':scope > .k10-vision-canvas');
-    if (!canvas) { canvas = document.createElement('canvas'); canvas.width = 240; canvas.height = 320; canvas.className = 'k10-vision-canvas'; lcd.replaceChildren(canvas); }
+    if (!canvas) { canvas = document.createElement('canvas'); canvas.className = 'k10-vision-canvas'; lcd.replaceChildren(canvas); }
+    const {width,height}=screenSize();if(canvas.width!==width)canvas.width=width;if(canvas.height!==height)canvas.height=height;
     return canvas;
   }
   function paint() {
     if (!state.show) return;
     const canvas = ensureCanvas(); if (!canvas) return;
-    const ctx = canvas.getContext('2d'); ctx.fillStyle = '#0d1724'; ctx.fillRect(0, 0, 240, 320);
+    const {width,height}=screenSize(),ctx = canvas.getContext('2d'); ctx.fillStyle = '#0d1724'; ctx.fillRect(0, 0, width, height);
     if (fresh() && state.video.videoWidth) {
-      const { scale, ox, oy } = core.fit(state.video.videoWidth, state.video.videoHeight);
+      const { scale, ox, oy } = core.fit(state.video.videoWidth, state.video.videoHeight, canvas.width, canvas.height);
       ctx.drawImage(state.video, ox, oy, state.video.videoWidth * scale, state.video.videoHeight * scale);
-    } else { ctx.fillStyle = '#ffffff'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('请开启 / 恢复摄像头', 120, 160); }
+    } else { ctx.fillStyle = '#ffffff'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('请开启 / 恢复摄像头', width/2, height/2); }
     if (state.drawing) ctx.drawImage(state.drawing, 0, 0);
     const face = currentFace();
     if (face) { const b = face.box; ctx.strokeStyle = '#20cfaf'; ctx.lineWidth = 2; ctx.strokeRect(b.x, b.y, b.width, b.height); }
@@ -208,9 +211,9 @@
   }
   function snapshot() {
     if (!fresh() || !state.video.videoWidth) return null;
-    const canvas = document.createElement('canvas'); canvas.width = 240; canvas.height = 320;
-    const ctx = canvas.getContext('2d'), { scale, ox, oy } = core.fit(state.video.videoWidth, state.video.videoHeight);
-    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 240, 320);
+    const {width,height}=screenSize(),canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
+    const ctx = canvas.getContext('2d'), { scale, ox, oy } = core.fit(state.video.videoWidth, state.video.videoHeight, canvas.width, canvas.height);
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(state.video, ox, oy, state.video.videoWidth * scale, state.video.videoHeight * scale);
     return canvas;
   }
@@ -221,12 +224,12 @@
       paint(); if (state.stream && !state.suspended) renderFrame = requestAnimationFrame(frame); };
     renderFrame = requestAnimationFrame(frame);
   }
-  function setDrawing(frame) { state.drawing ||= document.createElement('canvas'); state.drawing.width = 240; state.drawing.height = 320; state.drawing.getContext('2d').drawImage(frame, 0, 0); }
+  function setDrawing(frame) { state.drawing ||= document.createElement('canvas'); state.drawing.width = frame.width; state.drawing.height = frame.height; state.drawing.getContext('2d').drawImage(frame, 0, 0); }
   function show(value) {
     const changed = !state.show && value;
     state.show = value;
     if (value) {
-      if (changed && typeof getScreenBuffer === 'function') { getScreenBuffer().getContext('2d').clearRect(0, 0, 240, 320); state.drawing = null; }
+      if (changed && typeof getScreenBuffer === 'function') { const c=getScreenBuffer();c.getContext('2d').clearRect(0, 0, c.width, c.height); state.drawing = null; }
       paint(); startRender(); start();
     } else { state.drawing = null; if (typeof publishScreenFrame === 'function') publishScreenFrame(getScreenBuffer()); }
   }
@@ -244,6 +247,7 @@
     if (state.busy) { if (state.command !== kind) status('人脸引擎正忙，请等当前操作完成后重试', true); return; }
     if (state.source === 'simulation') { status('学习与识别演示按钮需要真实摄像头；模拟数据请用积木程序'); return; }
     if (state.mode !== '人脸检测') { status('请先切换为人脸检测模式', true); return; }
+    if (!faceDirectionAllowed()) { status('人脸识别需要屏幕方向为 0°', true); return; }
     state.busy = true; state.command = kind; state.requestId++; results.reset(); const ticket = token();
     try {
       await ready; if (state.archiveError) throw new Error(state.archiveError);
@@ -336,20 +340,23 @@
   }
   function install() {
     const host = document.querySelector('.sim-panel'); if (!host) return;
-    const panel = document.createElement('section'); panel.className = 'vision-panel'; panel.id = 'visionPanel';
-    panel.innerHTML = `<header><strong>摄像头与人脸识别</strong><span id="visionCount">本机已学习 0/48 张人脸</span></header>
+    const panel = document.createElement('dialog'); panel.className = 'vision-panel'; panel.id = 'visionPanel';
+    panel.setAttribute('aria-labelledby', 'visionTitle');
+    panel.innerHTML = `<header><div><strong id="visionTitle">摄像头与人脸识别</strong><span id="visionCount">本机已学习 0/48 张人脸</span></div><button id="visionClose" type="button" aria-label="关闭摄像头面板">×</button></header>
       <label class="vision-source">视觉来源<select id="visionSource"><option value="simulation">模拟输入</option><option value="computer">本机摄像头（电脑 / 手机）</option><option value="phone">手机摄像头 → 电脑</option></select></label>
-      <div class="vision-preview" id="visionPreview"><span>连接只预览画面，K10 显示由积木控制</span></div>
+      <div class="vision-preview" id="visionPreview"><span>尚未连接摄像头</span></div>
       <p id="visionStatus" role="status" aria-live="polite"></p><p id="visionIdentity">尚未识别身份</p>
       <div class="vision-actions"><button id="visionStart" type="button">开启 / 恢复</button><button id="visionEnd" type="button">结束连接</button></div>
       <div class="vision-keys"><button type="button" data-vision-key="A"><b>A</b><span>虚拟按键</span></button><button type="button" data-vision-key="B"><b>B</b><span>虚拟按键</span></button></div>
-      <small>与主板 A/B 按键相同，功能由积木程序定义。载入“人脸识别”示例后，A 学习、B 遗忘全部。</small>
-      <details><summary>直接体验人脸学习 / 识别</summary><p>首次学习会在本机保存人脸特征，不保存照片或视频。工程文件不包含这些特征。</p>
+      <details><summary>人脸学习与识别</summary>
         <label class="vision-consent"><input type="checkbox" id="visionConsent">允许在本机保存人脸特征</label>
         <div class="vision-actions"><button id="visionLearn" type="button">学习当前人脸</button><button id="visionRecognize" type="button">识别一次</button></div>
         <div class="vision-actions"><select id="visionForgetId" aria-label="要遗忘的人脸 ID"></select><button id="visionForget" type="button" disabled>遗忘所选</button><button id="visionForgetAll" type="button">遗忘全部</button></div></details>
       <div id="visionPhonePair" hidden><button id="visionPair" type="button">连接手机 / 更换设备</button><div id="visionPairDetails" hidden><p id="visionPairTime" class="pairing-time"></p><div id="visionPairQR"></div><label>手机链接<textarea id="visionPairLink" readonly></textarea></label><button id="visionCopyLink" type="button" disabled>复制完整手机链接</button><label>手机返回码<textarea id="visionAnswer" placeholder="粘贴手机页面生成的返回码"></textarea></label><button id="visionAccept" type="button" disabled>确认连接这台手机</button></div><small>手机须能访问当前网站。首版适合同一 Wi-Fi；未配置 TURN，不保证跨网络连接。</small></div>`;
-    host.querySelector('.sensor-panel')?.before(panel);
+    document.body.append(panel);
+    const toggle = document.createElement('button'); toggle.id = 'visionToggle'; toggle.type = 'button'; toggle.className = 'virtual-io-btn'; toggle.textContent = '摄像头'; toggle.setAttribute('aria-haspopup', 'dialog');
+    host.querySelector('#virtualIOBtn').before(toggle);
+    toggle.onclick = () => panel.showModal(); el('visionClose').onclick = () => panel.close();
     el('visionSource').onchange = e => selectSource(e.target.value);
     el('visionStart').onclick = () => start(); el('visionEnd').onclick = () => stop(true);
     el('visionConsent').onchange = () => {};
@@ -365,8 +372,11 @@
     };
     panel.querySelectorAll('[data-vision-key]').forEach(key => state.controls.push(core.bindButton(key, phase => button(key.dataset.visionKey, phase))));
     status(state.status); updateProfiles();
-    const observer = new MutationObserver(() => { const hide = typeof currentBoard !== 'undefined' && currentBoard !== 'k10' || typeof currentMode !== 'undefined' && currentMode !== 'virtual'; panel.hidden = hide; });
+    const updateAvailability = () => { const hide = typeof currentBoard !== 'undefined' && currentBoard !== 'k10' || typeof currentMode !== 'undefined' && currentMode !== 'virtual'; toggle.hidden = hide; if (hide && panel.open) panel.close(); };
+    const observer = new MutationObserver(updateAvailability);
     observer.observe(host, { attributes: true, attributeFilter: ['aria-label'] });
+    document.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click', updateAvailability));
+    updateAvailability();
     document.addEventListener('visibilitychange', () => { if (document.hidden) { cancelLearningSave(); state.controls.forEach(r => r()); state.face = null; state.requestId++; state.busy = false; results.reset(); } });
     window.addEventListener('blur', () => state.controls.forEach(r => r()));
     window.addEventListener('pagehide', () => stop(true));
@@ -376,6 +386,7 @@
     isReal: () => state.source !== 'simulation', displaying: () => state.show,
     publish: frame => { if (!state.show) return false; setDrawing(frame); paint(); return true; },
     qr: canvas => { state.qr = canvas; paint(); }, debugPaused: () => typeof runtimeDebugger !== 'undefined' && runtimeDebugger?.paused,
+    geometryChanged: () => { state.drawing=null;state.qr=null;state.face=null;results.reset();paint(); },
     reset: () => { state.programEpoch++; state.requestId++; state.busy = false; state.command = null; state.face = null; results.reset(); } };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install); else install();
 })();

@@ -75,6 +75,10 @@ async function loadProjectDocument(project,expectedEpoch=null) {
   }
   selectBoard(project.board);
   const workspaces=complete?project.workspaces:{[project.board]:project.workspace};
+  if(complete){
+    projectWorkspaces={};
+    for(const board of ['k10','m10'])if(!workspaces[board]){localStorage.removeItem('boardlab-workspace-'+board);localStorage.removeItem('boardlab-workspace-updated-'+board);}
+  }
   Object.assign(projectWorkspaces,workspaces);
   for(const [board,workspace] of Object.entries(workspaces))try{localStorage.setItem('boardlab-workspace-'+board,JSON.stringify(workspace));localStorage.setItem('boardlab-workspace-updated-'+board,String(Date.now()));}catch{}
   Blockly.Events.disable();
